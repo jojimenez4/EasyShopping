@@ -1,0 +1,9 @@
+{% extends "../base.html" %}
+{% load static %}
+{% block content %}
+    <div class="content-section">
+        <small class="text-muted">
+            Has cerrado sesion. <a href="{% url 'login' %}">Iniciar Sesion</a>
+        </small>
+    </div>
+{% endblock %}
