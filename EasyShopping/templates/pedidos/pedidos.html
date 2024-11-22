@@ -1,5 +1,60 @@
 {% extends "../base.html" %}
-{% load static %}
-{% block content %}
 
+{% block content %}
+    <div class="content-section">
+        <h1 class="mb-4">Lista de Pedidos</h1>
+
+        <!-- Botón para crear un nuevo pedido -->
+        <div class="mb-3">
+            <a href="{% url 'generar_pedido' %}" class="btn btn-outline-success">Generar Nuevo Pedido</a>
+        </div>
+
+        <!-- Tabla para mostrar los pedidos -->
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>ID del Pedido</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Medida</th> <!-- Nueva columna para la medida -->
+                    <th>Precio Total</th>
+                    <th>Fecha de Pedido</th>
+                    <th>Estado</th>
+                    <th>Acciones</th> <!-- Aquí agregamos la columna para las acciones -->
+                </tr>
+            </thead>
+            <tbody>
+                {% for pedido in pedidos %}
+                    <tr>
+                        <td>{{ pedido.id }}</td>
+                        <td>
+                            {% for detalle in pedido.saledetail_set.all %}
+                                <p>{{ detalle.id_product.name }}</p> <!-- Producto -->
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% for detalle in pedido.saledetail_set.all %}
+                                <p>{{ detalle.cantidad }}</p> <!-- Cantidad -->
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% for detalle in pedido.saledetail_set.all %}
+                                <p>{{ detalle.id_product.medida_id.name }}</p> <!-- Medida del producto -->
+                            {% endfor %}
+                        </td>
+                        <td>${{ pedido.precio_total|floatformat:2 }}</td>  <!-- Mostrar el precio total -->
+                        <td>{{ pedido.fecha_venta }}</td>
+                        <td>{{ pedido.estado_pedido }}</td>
+                        <td>
+                            <a href="{% url 'detalle_pedido' pedido.id %}" class="btn btn-info btn-sm">Detalle Pedido</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center">No hay pedidos registrados</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 {% endblock %}

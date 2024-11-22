@@ -1,0 +1,40 @@
+{% extends "../base.html" %}
+{% block content %}
+<div class="content-section">
+    <h1 class="mb-4">Detalle del Pedido</h1>
+
+    <div class="mb-4">
+        <h4>Información del Pedido</h4>
+        <p><strong>ID:</strong> {{ pedido.id }}</p>
+        <p><strong>Contacto:</strong> {{ pedido.id_contacto.nombre_comprador if pedido.id_contacto else "Sin contacto" }}</p>
+        <p><strong>Fecha:</strong> {{ pedido.fecha_venta|date:"d/m/Y H:i" }}</p>
+        <p><strong>Estado:</strong> {{ pedido.estado_pedido }}</p>
+    </div>
+
+    <div class="mb-4">
+        <h4>Detalles del Pedido</h4>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unitario</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for detalle in detalles %}
+                    <tr>
+                        <td>{{ detalle.id_product.name }}</td>
+                        <td>{{ detalle.cantidad }}</td>
+                        <td>${{ detalle.precio_unitario }}</td>
+                        <td>${{ detalle.total }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <a href="{% url 'pedidos' %}" class="btn btn-secondary">Volver a Pedidos</a>
+</div>
+{% endblock %}
