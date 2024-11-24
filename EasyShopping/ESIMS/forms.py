@@ -43,11 +43,12 @@ class CrearMedidaForm(forms.ModelForm):
 class SaleForm(forms.ModelForm):
     class Meta:
         model = Sale
-        fields = ['id_contacto', 'estado_pedido']
+        fields = ['id_contacto', 'estado_pedido']  
         widgets = {
             'id_contacto': forms.Select(attrs={'class': 'form-control'}),
             'estado_pedido': forms.Select(attrs={'class': 'form-control'}),
         }
+
 
 class SaleDetailForm(forms.ModelForm):
     class Meta:

@@ -15,23 +15,25 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-black">
         <div class="container-fluid">
-          <a class="navbar-brand" href="#">EaSP</a>
+          <a class="navbar-brand" href="{% url 'inventario' %}">EaSP</a>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
           </button>
           <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
             <div class="navbar-nav">
-              <a class="nav-link active" aria-current="page" href="#">Inicio</a>
+              <a class="nav-link active" aria-current="page" href="{% url 'inventario' %}">Inicio</a>
+
+              <a href="{% url 'pedidos' %}"  class="nav-link active" aria-current="page">Ver Pedidos</a>
               {% if request.user.is_authenticated %}
               <form action="{% url 'logout' %}" method="post">
                 {% csrf_token %}
-                <button class="btn btn-primary" type="submit">Logout</button>
+                <button  class="nav-link active" aria-current="page" type="submit">Logout</button>
               </form>
               {% endif %}
             </div>
           </div>
         </div>
-        <a href="{% url 'pedidos' %}" class="btn btn-primary">Ver Pedidos</a>
+        
 
         
       </nav>
