@@ -3,6 +3,7 @@ from django.core.validators import MinValueValidator
 
 class ProductSize(models.Model):
     name = models.CharField(max_length=5, unique=True)
+    is_active = models.BooleanField(default=True) 
 
     def __str__(self):
         return self.name
@@ -16,6 +17,7 @@ class Contact(models.Model):
 
 class ProductCategory(models.Model):
     nombre_categoria = models.CharField(max_length=100, unique=True)
+    is_active = models.BooleanField(default=True) 
 
     def __str__(self):
         return self.nombre_categoria
@@ -26,6 +28,7 @@ class Product(models.Model):
     stock = models.PositiveIntegerField(validators=[MinValueValidator(0)])
     medida_id = models.ForeignKey(ProductSize, on_delete=models.CASCADE)
     id_categoria = models.ForeignKey(ProductCategory, on_delete=models.CASCADE, null=False, blank=False)  # Obligatorio
+    is_active = models.BooleanField(default=True) 
 
     def __str__(self):
         return self.name

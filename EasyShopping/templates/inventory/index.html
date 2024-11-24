@@ -143,6 +143,18 @@
                         <a href="{% url 'editar_producto' producto.pk %}" class="btn btn-outline-primary btn-sm">Editar</a>
                         <a href="{% url 'eliminar_producto' producto.pk %}" class="btn btn-outline-danger btn-sm">Eliminar</a>
                     </td>
+                    <td>
+                        {% if producto.is_active %}
+                            <a href="{% url 'eliminar_producto' producto.pk %}" class="btn btn-outline-danger btn-sm">Desactivar</a>
+                        {% else %}
+                            <span class="text-muted">Inactivo</span>
+                        {% endif %}
+                        {% if not producto.is_active %}
+                              <a href="{% url 'activar_producto' producto.pk %}" class="btn btn-outline-success btn-sm">Activar</a>
+                        {% endif %}
+
+                    </td>
+                    
                 </tr>
                 {% empty %}
                 <tr>
