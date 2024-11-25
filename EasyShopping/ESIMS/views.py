@@ -1,10 +1,11 @@
 from django.shortcuts import redirect, render, get_object_or_404
-from .models import Product, Sale,SaleDetail, Product
+from .models import Product, Sale,SaleDetail, Product, ProductSize, ProductCategory
 from django.contrib.auth.decorators import login_required
-from .forms import AñadirProductoForm,CrearCategoriaForm, CrearMedidaForm, SaleForm, SaleDetailForm
+from .forms import AñadirProductoForm,CrearCategoriaForm, CrearMedidaForm, SaleForm, SaleDetailForm, Product,ProductCategory,ProductSize
 from django.db.models import Q,F
-from .models import Product, ProductSize, ProductCategory
-from django.forms import modelformset_factory
+from django.contrib import messages
+
+
 
 @login_required
 def inventario(request):
@@ -82,9 +83,28 @@ def añadir_producto(request):
 
 @login_required
 def eliminar_producto(request, pk):
-    product = get_object_or_404(Product, pk=pk)
-    product.delete()
-    return redirect('/inventario/')
+    producto = get_object_or_404(Product, pk=pk)
+    producto.is_active = False
+    producto.save()
+    messages.success(request, f"Producto {producto.name} desactivado con éxito.")
+    return redirect('inventario')
+
+@login_required
+def eliminar_categoria(request, pk):
+    categoria = get_object_or_404(ProductCategory, pk=pk)
+    categoria.is_active = False
+    categoria.save()
+    messages.success(request, f"Categoría {categoria.nombre_categoria} desactivada con éxito.")
+    return redirect('inventario')
+
+@login_required
+def eliminar_tamaño(request, pk):
+    categoria = get_object_or_404(ProductSize, pk=pk)
+    categoria.is_active = False
+    categoria.save()
+    messages.success(request, f"Categoría {categoria.nombre_categoria} desactivada con éxito.")
+    return redirect('inventario')
+
 
 @login_required
 def editar_producto(request, pk):
@@ -140,19 +160,43 @@ def crear_medida(request):
 
 @login_required
 def generar_pedido(request):
-    productos = Product.objects.all()  # Todos los productos
+    productos = Product.objects.filter(is_active=True)  # Solo productos activos
 
     if request.method == 'POST':
         sale_form = SaleForm(request.POST)
         productos_ids = request.POST.getlist('products[]')
         cantidades = request.POST.getlist('cantidades[]')
 
-        if sale_form.is_valid() and productos_ids and cantidades:
+        # Filtrar productos_ids y cantidades para eliminar valores vacíos
+        productos_ids = [product_id for product_id in productos_ids if product_id.strip()]
+        cantidades = [cantidad for cantidad in cantidades if cantidad.strip()]
+
+        # Verificar si hay productos y cantidades válidos
+        if not productos_ids or not cantidades:
+            messages.error(request, "Debes seleccionar al menos un producto y su cantidad.")
+            return render(request, 'pedidos/generar_pedido.html', {
+                'sale_form': sale_form,
+                'productos': productos,
+            })
+
+        # Validar que los productos seleccionados están activos
+        for product_id in productos_ids:
+            producto = Product.objects.filter(id=product_id, is_active=True).first()
+            if not producto:
+                messages.error(request, f"El producto con ID {product_id} no está activo o no existe.")
+                return render(request, 'pedidos/generar_pedido.html', {
+                    'sale_form': sale_form,
+                    'productos': productos,
+                })
+
+        # Si el formulario y los productos son válidos, procesar el pedido
+        if sale_form.is_valid():
             sale = sale_form.save()
 
+            # Crear detalles de venta
             for product_id, cantidad in zip(productos_ids, cantidades):
                 if product_id and cantidad:
-                    producto = Product.objects.get(id=product_id)
+                    producto = get_object_or_404(Product, id=product_id, is_active=True)
                     SaleDetail.objects.create(
                         id_venta=sale,
                         id_product=producto,
@@ -160,6 +204,7 @@ def generar_pedido(request):
                         precio_unitario=producto.price,
                     )
 
+            messages.success(request, "Pedido generado exitosamente.")
             return redirect('pedidos')  # Redirige a la lista de pedidos
 
     else:
@@ -169,6 +214,7 @@ def generar_pedido(request):
         'sale_form': sale_form,
         'productos': productos,
     })
+
     
 @login_required
 def detalle_pedido_view(request, id):
@@ -178,3 +224,12 @@ def detalle_pedido_view(request, id):
         'pedido': pedido,
         'detalles': detalles,
     })
+
+@login_required
+def activar_producto(request, pk):
+    producto = get_object_or_404(Product, pk=pk, is_active=False)
+    producto.is_active = True
+    producto.save()
+    messages.success(request, f"Producto {producto.name} activado con éxito.")
+    return redirect('inventario')
+
