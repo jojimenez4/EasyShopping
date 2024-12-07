@@ -241,6 +241,40 @@ async function productsCall(userId) {
   }
 }
 
+// Función para obtener o crear un contacto
+async function getOrCreateContactId(userId) {
+  let contactId;
+
+  try {
+    
+    const [rows] = await dbConnection.query(
+      `SELECT id FROM esims_contact WHERE \`numero_chatbot\` = ?`,  
+      [userId]  
+    );
+
+    
+    if (rows.length > 0) {
+      contactId = rows[0].id;
+    } else {
+      
+      const [insertResult] = await dbConnection.query(
+        `INSERT INTO esims_contact (\`numero_chatbot\`, \`nombre_comprador\`) VALUES (?, ?)`,  // Insertar número y nombre
+        [userId, 'prueba']  // Insertamos el número de teléfono y el nombre "prueba"
+      );
+
+      
+      contactId = insertResult.insertId;
+    }
+
+    
+    return contactId;
+  } catch (error) {
+    console.error("Error al obtener o crear el contacto:", error);
+    return null;
+  }
+}
+
+
 
 // Maneja los mensajes entrantes
 app.post('/webhook', async (req, res) => {
@@ -289,16 +323,47 @@ app.post('/webhook', async (req, res) => {
     }
   }
   else if (incomingText === "Pedidos" && !(userStates[userId]?.inProductSelection)) {
-    if (userStates[userId].order.length > 0) {
-      replyText = "Aquí tienes tus pedidos:\n"
-      await sendMessage(replyText, userId); // Solo mensaje de texto
+    try {
+      // Paso 1: Obtener el id del contacto desde la tabla esims_contact usando el numero_chatbot
+      const [contact] = await dbConnection.query(
+        `SELECT id FROM esims_contact WHERE numero_chatbot = ?`, // Buscar el id por el numero_chatbot
+        [userId] // El userId es el numero_chatbot del usuario
+      );
+  
+      // Verificar si se encontró la id del contacto
+      if (contact.length > 0) {
+        const idContacto = contact[0].id; // Obtener la id del contacto
+  
+        // Paso 2: Realizar la consulta a la tabla esims_sale con la id del contacto obtenida
+        const [pedidos] = await dbConnection.query(
+          `SELECT * FROM esims_sale WHERE id_contacto_id = ?`, // Buscar los pedidos asociados a la id del contacto
+          [idContacto] // Usamos la id del contacto obtenida
+        );
+  
+        // Verificar si hay pedidos
+        if (pedidos.length > 0) {
+          let replyText = "Aquí tienes tus pedidos:\n";
+          pedidos.forEach(pedido => {
+            // Personaliza el mensaje con la información relevante del pedido
+            replyText += `Pedido ID: ${pedido.id}\nFecha: ${pedido.fecha_venta}\nEstado: ${pedido.estado_pedido}\n\n`; // Añadido salto de línea entre fecha y estado
+          });
+          await sendMessage(replyText, userId); // Enviar los pedidos al usuario
+        } else {
+          replyText = "No tienes pedidos registrados.";
+          await sendMessage(replyText, userId); // Mensaje si no hay pedidos
+        }
+      } else {
+        const errorMessage = "No se encontró la ID de tu contacto.";
+        await sendMessage(errorMessage, userId); // Mensaje si no se encuentra la ID del contacto
+      }
+    } catch (error) {
+      console.error("Error al consultar los pedidos:", error);
+      const errorMessage = "Hubo un problema al obtener tus pedidos. Por favor, intenta de nuevo más tarde.";
+      await sendMessage(errorMessage, userId); // Mensaje en caso de error
     }
-    else {
-      replyText = "No tienes pedidos registrados.";
-      await sendMessage(replyText, userId); // Solo mensaje de texto
-    }
-
   }
+  
+  
   else if (incomingText === "Ayuda" && !(userStates[userId]?.inProductSelection)) {
 
     replyText = "ahora lo contactaremos.";
@@ -424,7 +489,8 @@ app.post('/webhook', async (req, res) => {
 
           // Procesar pedido solo si hay stock suficiente
           const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-          const contactId = userStates[userId]?.contactId || null;
+          const contactId = await getOrCreateContactId(userId);
+          userStates[userId].contactId = contactId
 
           // Insertar el pedido en `esims_sale`
           const [saleResult] = await dbConnection.query(
