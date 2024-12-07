@@ -159,9 +159,10 @@ async function postSelect(userId) {
 // Función para listar productos con paginación
 async function listProducts(page) {
   const offset = (page - 1) * PAGE_SIZE;
-  const [rows] = await dbConnection.query(`SELECT id, name, price FROM esims_product LIMIT ${PAGE_SIZE} OFFSET ${offset}`);
+  const [rows] = await dbConnection.query(`SELECT id, name, price FROM esims_product WHERE is_active = 1 LIMIT ${PAGE_SIZE} OFFSET ${offset}`);
   return rows;
 }
+
 async function productsCall(userId) {
   // Inicializa la página de productos
   if (!userStates[userId].productPage) {
@@ -182,6 +183,8 @@ async function productsCall(userId) {
 
     // Texto de respuesta con la lista de productos
     replyText = `Los productos disponibles son:\n${productList}\nResponde con un número de la lista o ">" para ver más productos.`;
+
+    // Consultar los productos de la siguiente página
     const nextPageProducts = await listProducts(userStates[userId].productPage + 1);
     const buttons = [];
 
@@ -207,14 +210,28 @@ async function productsCall(userId) {
       });
     }
 
+    // Si no hay botones, enviar solo el mensaje de texto (sin botones)
+    if (buttons.length === 0) {
+      await sendMessage(replyText, userId);
+      return;
+    }
+
+    // Asegurarse de que no se envíen más de 3 botones
+    if (buttons.length > 3) {
+      buttons.splice(3); // Limitar el número de botones a 3
+    }
+
     // Enviar el mensaje interactivo con los botones
     await sendInteractiveMessage(userId, replyText, buttons);
   } else {
     // Si no hay productos, se envía un mensaje de error
     replyText = "No encontré productos en la base de datos.";
     await sendMessage(replyText, userId); // Solo mensaje de texto
+    await inicio(userId, replyText);
+    userStates[userId].inProductSelection = false;
   }
 }
+
 
 // Maneja los mensajes entrantes
 app.post('/webhook', async (req, res) => {
@@ -252,7 +269,6 @@ app.post('/webhook', async (req, res) => {
     replyText = "Hola, bienvenido a Easy Shopping!";
     await sendMessage(replyText, userId); // Solo mensaje de texto
     await inicio(userId, replyText);
-
     return res.sendStatus(200); // Solo enviar la respuesta una vez
   }
   // Aquí se manejan los mensajes después del saludo
