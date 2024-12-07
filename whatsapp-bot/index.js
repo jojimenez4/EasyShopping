@@ -160,7 +160,14 @@ async function postSelect(userId) {
 // Función para listar productos con paginación
 async function listProducts(page) {
   const offset = (page - 1) * PAGE_SIZE;
-  const [rows] = await dbConnection.query(`SELECT id, name, price FROM esims_product WHERE is_active = 1 LIMIT ${PAGE_SIZE} OFFSET ${offset}`);
+  const [rows] = await dbConnection.query(`
+    SELECT p.id, p.name, p.price, p.stock, ps.name AS size, pc.nombre_categoria AS category 
+    FROM esims_product p
+    JOIN esims_productsize ps ON p.medida_id_id = ps.id
+    JOIN esims_productcategory pc ON p.id_categoria_id = pc.id
+    WHERE p.is_active = 1
+    LIMIT ${PAGE_SIZE} OFFSET ${offset}
+  `);
   return rows;
 }
 
@@ -179,8 +186,10 @@ async function productsCall(userId) {
   if (rows.length > 0) {
     // Crear la lista de productos formateada
     const productList = rows
-      .map((row, index) => `${index + 1}- ${row.name} ($${row.price})`)
+      .map((row, index) => ` ${index + 1}-  | ${row.name} | $${Number(row.price).toFixed(0)} X ${row.size}\n ↳ Stock: ${String(row.stock)}`)
+
       .join("\n");
+
 
     // Texto de respuesta con la lista de productos
     replyText = `Los productos disponibles son:\n${productList}\nResponde con un número de la lista o ">" para ver más productos.`;
@@ -456,6 +465,7 @@ app.post('/webhook', async (req, res) => {
           userStates[userId].inShoppingCart = false;
           userStates[userId].hasGreeted = false;
           userStates[userId].order = [];
+          userStates[userId].inProductSelection = false;
 
           console.log('Todos los productos fueron insertados con éxito');
         }
