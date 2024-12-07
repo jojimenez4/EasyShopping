@@ -1,6 +1,16 @@
 {% extends "../base.html" %}
+
 {% block content %}
+
 <div class="content-section">
+    {% if messages %}
+    <div class="alert alert-info">
+        {% for message in messages %}
+            <p>{{ message }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <h1 class="mb-4">Generar Pedido</h1>
 
     <form method="POST">
@@ -26,11 +36,11 @@
                     <tr class="product-row">
                         <td>
                             <select class="form-control product-select" name="products[]">
-                                <option value="" data-price="0">Seleccione un producto</option>
+                                <option value="" data-price="0" data-stock="0">Seleccione un producto</option>
                                 {% for product in productos %}
-                                <option value="{{ product.id }}" data-price="{{ product.price }}">
-                                    {{ product.name }}
-                                </option>
+                                    <option value="{{ product.id }}" data-price="{{ product.price }}" data-stock="{{ product.stock }}">
+                                        {{ product.name }} (Stock: {{ product.stock }})
+                                    </option>
                                 {% endfor %}
                             </select>
                         </td>
@@ -61,6 +71,7 @@
         const table = document.querySelector('#productos-table tbody');
         const totalElement = document.querySelector('#total');
 
+        // Actualiza el total del pedido y los subtotales de cada fila
         const updateTotals = () => {
             let total = 0;
             table.querySelectorAll('.product-row').forEach(row => {
@@ -73,6 +84,7 @@
             totalElement.textContent = total.toFixed(2);
         };
 
+        // Añadir nueva fila de producto
         document.querySelector('#add-row').addEventListener('click', () => {
             const newRow = table.querySelector('.product-row').cloneNode(true);
             newRow.querySelector('.cantidad-input').value = 1;
@@ -80,9 +92,11 @@
             table.appendChild(newRow);
         });
 
+        // Actualizar el total cuando cambien las opciones del producto o la cantidad
         table.addEventListener('change', updateTotals);
         table.addEventListener('input', updateTotals);
 
+        // Eliminar una fila de producto
         table.addEventListener('click', (event) => {
             if (event.target.classList.contains('remove-row')) {
                 const row = event.target.closest('.product-row');
@@ -92,6 +106,26 @@
                 }
             }
         });
+
+        // Validar el stock antes de enviar el formulario
+        document.querySelector('form').addEventListener('submit', (event) => {
+            let valid = true;
+            table.querySelectorAll('.product-row').forEach(row => {
+                const productSelect = row.querySelector('.product-select');
+                const cantidad = parseInt(row.querySelector('.cantidad-input').value);
+                const stock = parseInt(productSelect.options[productSelect.selectedIndex].dataset.stock);
+
+                if (cantidad > stock) {
+                    alert(`No hay suficiente stock para el producto ${productSelect.options[productSelect.selectedIndex].text}`);
+                    valid = false;
+                }
+            });
+
+            if (!valid) {
+                event.preventDefault();  // Evitar el envío del formulario
+            }
+        });
     });
 </script>
+
 {% endblock %}

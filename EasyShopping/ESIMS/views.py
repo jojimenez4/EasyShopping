@@ -7,6 +7,9 @@ from django.contrib import messages
 
 
 
+
+
+
 @login_required
 def inventario(request):
     # Obtener parámetros de búsqueda
@@ -233,3 +236,63 @@ def activar_producto(request, pk):
     messages.success(request, f"Producto {producto.name} activado con éxito.")
     return redirect('inventario')
 
+@login_required
+def generar_pedido(request):
+    if request.method == 'POST':
+        sale_form = SaleForm(request.POST)
+        
+        # Procesamos el formulario de la venta
+        if sale_form.is_valid():
+            # Obtenemos los productos seleccionados y las cantidades
+            productos_seleccionados = request.POST.getlist('products[]')
+            cantidades = request.POST.getlist('cantidades[]')
+
+            # Lista de productos con stock insuficiente
+            productos_sin_stock = []
+
+            # Verificamos si hay suficiente stock para cada producto
+            for product_id, cantidad in zip(productos_seleccionados, cantidades):
+                producto = Product.objects.get(id=product_id)
+                cantidad = int(cantidad)
+
+                if producto.stock < cantidad:
+                    # Si no hay suficiente stock, agregamos el producto a la lista
+                    productos_sin_stock.append(producto.name)
+
+            # Si hay productos sin stock, mostramos el mensaje de error y redirigimos
+            if productos_sin_stock:
+                messages.error(request, f"No hay suficiente stock para los siguientes productos: {', '.join(productos_sin_stock)}")
+                return redirect('generar_pedido')
+
+            # Si todo está bien, guardamos la venta
+            sale = sale_form.save()
+
+            # Reducimos el stock y creamos los detalles de la venta
+            for product_id, cantidad in zip(productos_seleccionados, cantidades):
+                producto = Product.objects.get(id=product_id)
+                cantidad = int(cantidad)
+
+                # Reducimos el stock
+                producto.stock -= cantidad
+                producto.save()
+
+                # Creamos el detalle de la venta
+                SaleDetail.objects.create(
+                    id_venta=sale,  # Relacionamos la venta con el producto
+                    id_product=producto,  # Relacionamos el producto
+                    cantidad=cantidad,
+                    precio_unitario=producto.price,  # Precio del producto
+                    total=producto.price * cantidad  # Total por el producto
+                )
+
+            # Si todo ha ido bien, mostramos un mensaje de éxito
+            messages.success(request, "Pedido generado exitosamente.")
+            return redirect('pedidos')  # Redirigir al listado de pedidos
+
+    else:
+        sale_form = SaleForm()
+
+    # Cargar productos para mostrarlos en el formulario
+    productos = Product.objects.filter(is_active=True)  # Mostrar solo productos activos
+
+    return render(request, 'pedidos/generar_pedido.html', {'sale_form': sale_form, 'productos': productos})
