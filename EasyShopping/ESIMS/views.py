@@ -11,6 +11,7 @@ from django.contrib import messages
 
 
 @login_required
+@login_required
 def inventario(request):
     # Obtener parámetros de búsqueda
     id_producto = request.GET.get('id', '')
@@ -53,7 +54,7 @@ def inventario(request):
     # Ordenación
     ordenar_por = request.GET.get('ordenar_por', 'id')  # Orden predeterminado por ID
     orden = request.GET.get('orden', 'asc')  # Ascendente por defecto
-    if ordenar_por in ['id','name', 'price', 'stock']:
+    if ordenar_por in ['id', 'name', 'price', 'stock', 'id_categoria', 'medida']:
         if orden == 'desc':
             productos = productos.order_by(f"-{ordenar_por}")
         else:
@@ -61,6 +62,7 @@ def inventario(request):
 
     # Determina el orden invertido para el template
     nuevo_orden = 'desc' if orden == 'asc' else 'asc'
+
     # Contexto para filtros y resultados
     context = {
         'producto': productos,
@@ -71,6 +73,7 @@ def inventario(request):
         'ordenar_por': ordenar_por,
     }
     return render(request, 'inventory/index.html', context)
+
 
 @login_required
 def añadir_producto(request):
