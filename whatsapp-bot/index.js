@@ -358,109 +358,94 @@ app.post('/webhook', async (req, res) => {
   else if (userStates[userId]?.inShoppingCart) {
     if (incomingText === "Confirmar pedido") {
       if (userStates[userId].order.length === 0) {
-        // Caso en el que no hay productos en el pedido
         replyText = "No tienes productos en tu pedido.";
         await sendMessage(replyText, userId);
-        return;  // Detener la ejecución si no hay productos
+        return; // Detener la ejecución si no hay productos
       }
   
-      // Generar un resumen del pedido
-      let total = 0;
-      let orderSummary = "Tu pedido confirmado incluye:\n\n";
-  
-      userStates[userId].order.forEach((item, index) => {
-        const subtotal = item.price * item.quantity;
-        total += subtotal;
-        orderSummary += `${index + 1}. -${item.id}  ${item.name} - ${item.quantity} unidad(es) x $${item.price} = $${subtotal.toFixed(2)}\n`;
-      });
-  
-      orderSummary += `\nTotal: $${total.toFixed(2)}`;
-  
-      // Enviar el resumen del pedido
-      await sendMessage(orderSummary, userId);
-  
-      // Confirmar el pedido
-      replyText = "¡Gracias por tu pedido! Te contactaremos pronto para el envío.";
-      await sendMessage(replyText, userId);
-  
-      // Obtener la fecha y hora actual
-      const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  
-      // Asumir que tienes el `contactId` (es necesario que esté definido previamente)
-      const contactId = userStates[userId]?.contactId;
-  
-      // Insertar los productos en la base de datos
       try {
-        // Inserción en la tabla esims_sale para registrar la venta
-        const [saleResult] = await dbConnection.query(
-          `INSERT INTO esims_sale (fecha_venta, estado_pedido, id_contacto_id) 
-           VALUES (?, ?, ?)`,
-          [currentDate, 'Confirmado', contactId]
-        );
+        // Validar productos en el pedido antes de confirmarlo
+        let stockInsuficiente = [];
+        let productosConStock = [];
+        let total = 0;
   
-        // Obtener el ID de la venta recién insertada
-        const insertedSaleId = saleResult.insertId;  // Asegurarse de obtener el ID generado
-  
-        if (!insertedSaleId) {
-          throw new Error("No se generó un ID de venta válido.");
-        }
-  
-        // Insertar los detalles de la venta en esims_saledetail y actualizar el stock
-        for (const item of userStates[userId].order) {
-          // Verificar existencia del producto y stock
+        for (let i = 0; i < userStates[userId].order.length; i++) {
+          const item = userStates[userId].order[i];
           const [productResult] = await dbConnection.query(
-            `SELECT * FROM esims_product WHERE id = ?`,
+            `SELECT stock, name FROM esims_product WHERE id = ?`,
             [item.id]
           );
   
           if (productResult.length === 0) {
-            console.log(`Producto con ID ${item.id} no encontrado`);
-            await sendMessage(`El producto con ID ${item.id} no existe.`, userId);
+            stockInsuficiente.push(`Producto desconocido con ID ${item.id}`);
             continue;
           }
   
           const product = productResult[0];
-  
           if (product.stock >= item.quantity) {
-            console.log(`Stock suficiente para ${product.name}`);
-            
-            // Si hay suficiente stock, procedemos a insertar el detalle de la venta
-            const total = product.price * item.quantity; // Calcular el total para esta línea
-  
-            // Insertar el detalle de la venta en esims_saledetail
-            console.log(`Insertando detalle de venta:`, [
-              insertedSaleId,
-              product.id,
-              item.quantity,
-              product.price,
-              total
-            ]);
-  
-            await dbConnection.query(
-              `INSERT INTO esims_saledetail (id_venta_id, id_product_id, cantidad, precio_unitario, total) 
-               VALUES (?, ?, ?, ?, ?)`,
-              [insertedSaleId, product.id, item.quantity, product.price, total]
-            );
-  
-            // Actualizar el stock del producto en esims_product
-            await dbConnection.query(
-              `UPDATE esims_product SET stock = stock - ? WHERE id = ?`,
-              [item.quantity, product.id]
-            );
+            productosConStock.push(item);
+            total += item.price * item.quantity;
           } else {
-            console.log(`No hay suficiente stock para ${product.name}`);
-            await sendMessage(`No hay suficiente stock para el producto ${product.name}.`, userId);
+            stockInsuficiente.push(`${product.name} (Stock disponible: ${product.stock})`);
+            // Eliminar el producto sin stock del carrito automáticamente
+            userStates[userId].order.splice(i, 1); // Elimina el producto de la orden
+            i--; // Ajustar el índice después de la eliminación
           }
         }
+  
+        // Notificar si hay productos con stock insuficiente
+        if (stockInsuficiente.length > 0) {
+          replyText = `Los siguientes productos han sido eliminados del carrito debido a la falta de stock:\n- ${stockInsuficiente.join("\n- ")}`;
+          await sendMessage(replyText, userId);
+          await postSelect(userId);}
+        else if (stockInsuficiente.length == 0 ){
+          
+        // Procesar pedido solo si hay stock suficiente
+        const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const contactId = userStates[userId]?.contactId || null;
+  
+        // Insertar el pedido en `esims_sale`
+        const [saleResult] = await dbConnection.query(
+          `INSERT INTO esims_sale (fecha_venta, estado_pedido, id_contacto_id) VALUES (?, ?, ?)`,
+          [currentDate, 'Confirmado', contactId]
+        );
+  
+        const insertedSaleId = saleResult.insertId;
+  
+        // Insertar detalles del pedido y actualizar el stock
+        for (const item of productosConStock) {
+          const subtotal = item.price * item.quantity;
+  
+          // Insertar en `esims_saledetail`
+          await dbConnection.query(
+            `INSERT INTO esims_saledetail (id_venta_id, id_product_id, cantidad, precio_unitario, total) VALUES (?, ?, ?, ?, ?)`,
+            [insertedSaleId, item.id, item.quantity, item.price, subtotal]
+          );
+  
+          // Reducir el stock del producto
+          await dbConnection.query(
+            `UPDATE esims_product SET stock = stock - ? WHERE id = ?`,
+            [item.quantity, item.id]
+          );
+        }
+  
+        // Confirmar pedido al usuario
+        let orderSummary = "Tu pedido confirmado incluye:\n\n";
+        productosConStock.forEach((item, index) => {
+          const subtotal = item.price * item.quantity;
+          orderSummary += `${index + 1}. ${item.name} - ${item.quantity} unidad(es) x $${item.price} = $${subtotal.toFixed(2)}\n`;
+        });
+        orderSummary += `\nTotal: $${total.toFixed(2)}\n¡Gracias por tu pedido! Te contactaremos pronto para el envío.`;
+        await sendMessage(orderSummary, userId);
+        
   
         // Vaciar el carrito y reiniciar el estado
         userStates[userId].inShoppingCart = false;
         userStates[userId].hasGreeted = false;
-        userStates[userId].order = []; // Vaciar el carrito
+        userStates[userId].order = []; 
   
-        replyText = "Pedido generado correctamente";
-        await sendMessage(replyText, userId);
         console.log('Todos los productos fueron insertados con éxito');
+        }
       } catch (error) {
         replyText = "Error al generar el pedido";
         await sendMessage(replyText, userId);
