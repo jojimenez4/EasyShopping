@@ -13,15 +13,16 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, DB_HOST, DB_USER, DB_PASSWO
 const userStates = {};
 const PAGE_SIZE = 9;
 
-// Configurar la conexión a MySQL
+
 const dbConnection = await mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "root",
-  database: "easyshopping",
+  host: DB_HOST,
+  user: DB_USER,
+  password: DB_PASSWORD,
+  database: DB_NAME,
   port: 3306,
 });
-console.log("Conexión a la base de datos exitosa!");
+
+
 
 // Ruta para validar el webhook con WhatsApp
 app.get('/webhook', (req, res) => {
@@ -188,7 +189,15 @@ async function productsCall(userId) {
     const nextPageProducts = await listProducts(userStates[userId].productPage + 1);
     const buttons = [];
 
-    // Agregar el botón de retroceso solo si la página es mayor a 1
+    if (nextPageProducts.length > 0) {
+      buttons.push({
+        type: "reply",
+        reply: {
+          id: ">",
+          title: ">",
+        },
+      });
+    }
     if (userStates[userId].productPage > 1) {
       buttons.unshift({
         type: "reply",
@@ -199,16 +208,7 @@ async function productsCall(userId) {
       });
     }
 
-    // Agregar el botón de avance solo si hay más productos en la siguiente página
-    if (nextPageProducts.length > 0) {
-      buttons.push({
-        type: "reply",
-        reply: {
-          id: ">",
-          title: ">",
-        },
-      });
-    }
+
 
     // Si no hay botones, enviar solo el mensaje de texto (sin botones)
     if (buttons.length === 0) {
@@ -349,7 +349,8 @@ app.post('/webhook', async (req, res) => {
         } else {
           // No hay más productos, mostrar un mensaje
           const replyText = "No hay más productos disponibles en la siguiente página.";
-          await sendMessage(replyText, userId)};
+          await sendMessage(replyText, userId)
+        };
       }
       else if (incomingText === "<" && userStates[userId].productPage > 1) {
         userStates[userId].productPage -= 1;
@@ -410,7 +411,7 @@ app.post('/webhook', async (req, res) => {
           await sendMessage(replyText, userId);
           await postSelect(userId);
         }
-        else if (userStates[userId].order.length !== 0 && stockInsuficiente.length === 0 ) {
+        else if (userStates[userId].order.length !== 0 && stockInsuficiente.length === 0) {
 
           // Procesar pedido solo si hay stock suficiente
           const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
