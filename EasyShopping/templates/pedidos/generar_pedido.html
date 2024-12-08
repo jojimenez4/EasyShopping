@@ -36,9 +36,9 @@
                     <tr class="product-row">
                         <td>
                             <select class="form-control product-select" name="products[]">
-                                <option value="" data-price="0" data-stock="0">Seleccione un producto</option>
+                                <option value="" data-precio="0" data-stock="0">Seleccione un producto</option>
                                 {% for product in productos %}
-                                <option value="{{ product.id }}" data-price="{{ product.price }}"
+                                <option value="{{ product.id }}" data-precio="{{ product.price }}"
                                     data-stock="{{ product.stock }}">
                                     {{ product.name }} (Stock: {{ product.stock }})
                                 </option>
@@ -80,8 +80,8 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const price = parseFloat(data.price);
-                    row.setAttribute('data-price', price); // Guarda el precio en un atributo
+                    const price = parseFloat(data.precio);
+                    row.setAttribute('data-precio', price); // Guarda el precio en un atributo
                     const cantidad = parseInt(row.querySelector('.cantidad-input').value || 0);
                     const subtotal = price * cantidad;
                     row.querySelector('.subtotal').textContent = subtotal.toFixed(2);
