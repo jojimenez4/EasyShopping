@@ -4,13 +4,8 @@ from django.contrib.auth.decorators import login_required
 from .forms import AñadirProductoForm,CrearCategoriaForm, CrearMedidaForm, SaleForm, SaleDetailForm, Product,ProductCategory,ProductSize
 from django.db.models import Q,F
 from django.contrib import messages
+from django.http import JsonResponse
 
-
-
-
-
-
-@login_required
 @login_required
 def inventario(request):
     # Obtener parámetros de búsqueda
@@ -260,7 +255,7 @@ def generar_pedido(request):
 
                 if producto.stock < cantidad:
                     # Si no hay suficiente stock, agregamos el producto a la lista
-                    productos_sin_stock.append(producto.name)
+                    productos_sin_stock.append(producto.nombre)
 
             # Si hay productos sin stock, mostramos el mensaje de error y redirigimos
             if productos_sin_stock:
@@ -299,3 +294,11 @@ def generar_pedido(request):
     productos = Product.objects.filter(is_active=True)  # Mostrar solo productos activos
 
     return render(request, 'pedidos/generar_pedido.html', {'sale_form': sale_form, 'productos': productos})
+
+@login_required
+def get_product_precios(request, product_id):
+    try:
+        product = Product.objects.get(id=product_id)
+        return JsonResponse({'success': True, 'precio': str(product.price)})
+    except Product.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Product not found'})

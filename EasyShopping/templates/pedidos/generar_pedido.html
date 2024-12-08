@@ -6,7 +6,7 @@
     {% if messages %}
     <div class="alert alert-info">
         {% for message in messages %}
-            <p>{{ message }}</p>
+        <p>{{ message }}</p>
         {% endfor %}
     </div>
     {% endif %}
@@ -38,14 +38,16 @@
                             <select class="form-control product-select" name="products[]">
                                 <option value="" data-price="0" data-stock="0">Seleccione un producto</option>
                                 {% for product in productos %}
-                                    <option value="{{ product.id }}" data-price="{{ product.price }}" data-stock="{{ product.stock }}">
-                                        {{ product.name }} (Stock: {{ product.stock }})
-                                    </option>
+                                <option value="{{ product.id }}" data-price="{{ product.price }}"
+                                    data-stock="{{ product.stock }}">
+                                    {{ product.name }} (Stock: {{ product.stock }})
+                                </option>
                                 {% endfor %}
                             </select>
                         </td>
                         <td>
-                            <input type="number" class="form-control cantidad-input" name="cantidades[]" min="1" value="1">
+                            <input type="number" class="form-control cantidad-input" name="cantidades[]" min="1"
+                                value="1">
                         </td>
                         <td>
                             <span class="subtotal">0.00</span>
@@ -71,60 +73,102 @@
         const table = document.querySelector('#productos-table tbody');
         const totalElement = document.querySelector('#total');
 
-        // Actualiza el total del pedido y los subtotales de cada fila
-        const updateTotals = () => {
+        // Actualizar subtotal y total
+        const fetchPrice = async (productId, row) => {
+            try {
+                const response = await fetch(`/inventario/get-price/${productId}/`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const price = parseFloat(data.price);
+                    row.setAttribute('data-price', price); // Guarda el precio en un atributo
+                    const cantidad = parseInt(row.querySelector('.cantidad-input').value || 0);
+                    const subtotal = price * cantidad;
+                    row.querySelector('.subtotal').textContent = subtotal.toFixed(2);
+                    updateTotal();
+                } else {
+                    console.error(data.error);
+                    row.querySelector('.subtotal').textContent = "Error";
+                }
+            } catch (error) {
+                console.error('Error fetching product price:', error);
+                row.querySelector('.subtotal').textContent = "Error";
+            }
+        };
+
+        // Añadir event listeners a una fila
+        const addEventListenersToRow = (row) => {
+            // Evento para cambio en el select de producto
+            row.querySelector('.product-select').addEventListener('change', (e) => {
+                const productId = e.target.value;
+                fetchPrice(productId, row);
+            });
+
+            // Evento para cambio en el input de cantidad
+            row.querySelector('.cantidad-input').addEventListener('input', () => {
+                const productId = row.querySelector('.product-select').value;
+                if (productId) {
+                    fetchPrice(productId, row);
+                }
+            });
+
+            // Evento para eliminar la fila
+            row.querySelector('.remove-row').addEventListener('click', () => {
+                row.remove();
+                updateTotal();
+            });
+        };
+
+        // Actualizar el total general
+        const updateTotal = () => {
             let total = 0;
             table.querySelectorAll('.product-row').forEach(row => {
-                const price = parseFloat(row.querySelector('.product-select option:checked').dataset.price || 0);
-                const cantidad = parseInt(row.querySelector('.cantidad-input').value || 0);
-                const subtotal = price * cantidad;
-                row.querySelector('.subtotal').textContent = subtotal.toFixed(2);
+                const subtotal = parseFloat(row.querySelector('.subtotal').textContent || 0);
                 total += subtotal;
             });
             totalElement.textContent = total.toFixed(2);
         };
 
-        // Añadir nueva fila de producto
+        // Añadir nueva fila
         document.querySelector('#add-row').addEventListener('click', () => {
-            const newRow = table.querySelector('.product-row').cloneNode(true);
+            const templateRow = table.querySelector('.product-row'); // Toma una fila como plantilla
+            const newRow = templateRow.cloneNode(true);
+
+            // Reinicia los valores de la nueva fila
             newRow.querySelector('.cantidad-input').value = 1;
             newRow.querySelector('.subtotal').textContent = '0.00';
+            newRow.querySelector('.product-select').value = '';
+            newRow.removeAttribute('data-precio');
+
+            // Añade eventos a la nueva fila
+            addEventListenersToRow(newRow);
+
+            // Agrega la fila a la tabla
             table.appendChild(newRow);
         });
 
-        // Actualizar el total cuando cambien las opciones del producto o la cantidad
-        table.addEventListener('change', updateTotals);
-        table.addEventListener('input', updateTotals);
+        // Inicializa los eventos en las filas existentes
+        table.querySelectorAll('.product-row').forEach(addEventListenersToRow);
+    });
 
-        // Eliminar una fila de producto
-        table.addEventListener('click', (event) => {
-            if (event.target.classList.contains('remove-row')) {
-                const row = event.target.closest('.product-row');
-                if (table.rows.length > 1) {
-                    row.remove();
-                    updateTotals();
-                }
+
+    // Validar el stock antes de enviar el formulario
+    document.querySelector('form').addEventListener('submit', (event) => {
+        let valid = true;
+        table.querySelectorAll('.product-row').forEach(row => {
+            const productSelect = row.querySelector('.product-select');
+            const cantidad = parseInt(row.querySelector('.cantidad-input').value);
+            const stock = parseInt(productSelect.options[productSelect.selectedIndex].dataset.stock);
+
+            if (cantidad > stock) {
+                alert(`No hay suficiente stock para el producto ${productSelect.options[productSelect.selectedIndex].text}`);
+                valid = false;
             }
         });
 
-        // Validar el stock antes de enviar el formulario
-        document.querySelector('form').addEventListener('submit', (event) => {
-            let valid = true;
-            table.querySelectorAll('.product-row').forEach(row => {
-                const productSelect = row.querySelector('.product-select');
-                const cantidad = parseInt(row.querySelector('.cantidad-input').value);
-                const stock = parseInt(productSelect.options[productSelect.selectedIndex].dataset.stock);
-
-                if (cantidad > stock) {
-                    alert(`No hay suficiente stock para el producto ${productSelect.options[productSelect.selectedIndex].text}`);
-                    valid = false;
-                }
-            });
-
-            if (!valid) {
-                event.preventDefault();  // Evitar el envío del formulario
-            }
-        });
+        if (!valid) {
+            event.preventDefault();  // Evitar el envío del formulario
+        }
     });
 </script>
 
