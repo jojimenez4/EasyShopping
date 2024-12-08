@@ -13,15 +13,16 @@ const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, PORT, DB_HOST, DB_USER, DB_PASSWO
 const userStates = {};
 const PAGE_SIZE = 9;
 
-// Configurar la conexión a MySQL
+
 const dbConnection = await mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "root",
-  database: "easyshopping",
+  host: DB_HOST,
+  user: DB_USER,
+  password: DB_PASSWORD,
+  database: DB_NAME,
   port: 3306,
 });
-console.log("Conexión a la base de datos exitosa!");
+
+
 
 // Ruta para validar el webhook con WhatsApp
 app.get('/webhook', (req, res) => {
@@ -159,9 +160,17 @@ async function postSelect(userId) {
 // Función para listar productos con paginación
 async function listProducts(page) {
   const offset = (page - 1) * PAGE_SIZE;
-  const [rows] = await dbConnection.query(`SELECT id, name, price FROM esims_product LIMIT ${PAGE_SIZE} OFFSET ${offset}`);
+  const [rows] = await dbConnection.query(`
+    SELECT p.id, p.name, p.price, p.stock, ps.name AS size, pc.nombre_categoria AS category 
+    FROM esims_product p
+    JOIN esims_productsize ps ON p.medida_id_id = ps.id
+    JOIN esims_productcategory pc ON p.id_categoria_id = pc.id
+    WHERE p.is_active = 1
+    LIMIT ${PAGE_SIZE} OFFSET ${offset}
+  `);
   return rows;
 }
+
 async function productsCall(userId) {
   // Inicializa la página de productos
   if (!userStates[userId].productPage) {
@@ -177,15 +186,27 @@ async function productsCall(userId) {
   if (rows.length > 0) {
     // Crear la lista de productos formateada
     const productList = rows
-      .map((row, index) => `${index + 1}- ${row.name} ($${row.price})`)
+      .map((row, index) => ` ${index + 1}-  | ${row.name} | $${Number(row.price).toFixed(0)} X ${row.size}\n ↳ Stock: ${String(row.stock)}`)
+
       .join("\n");
+
 
     // Texto de respuesta con la lista de productos
     replyText = `Los productos disponibles son:\n${productList}\nResponde con un número de la lista o ">" para ver más productos.`;
+
+    // Consultar los productos de la siguiente página
     const nextPageProducts = await listProducts(userStates[userId].productPage + 1);
     const buttons = [];
 
-    // Agregar el botón de retroceso solo si la página es mayor a 1
+    if (nextPageProducts.length > 0) {
+      buttons.push({
+        type: "reply",
+        reply: {
+          id: ">",
+          title: ">",
+        },
+      });
+    }
     if (userStates[userId].productPage > 1) {
       buttons.unshift({
         type: "reply",
@@ -196,15 +217,17 @@ async function productsCall(userId) {
       });
     }
 
-    // Agregar el botón de avance solo si hay más productos en la siguiente página
-    if (nextPageProducts.length > 0) {
-      buttons.push({
-        type: "reply",
-        reply: {
-          id: ">",
-          title: ">",
-        },
-      });
+
+
+    // Si no hay botones, enviar solo el mensaje de texto (sin botones)
+    if (buttons.length === 0) {
+      await sendMessage(replyText, userId);
+      return;
+    }
+
+    // Asegurarse de que no se envíen más de 3 botones
+    if (buttons.length > 3) {
+      buttons.splice(3); // Limitar el número de botones a 3
     }
 
     // Enviar el mensaje interactivo con los botones
@@ -213,8 +236,45 @@ async function productsCall(userId) {
     // Si no hay productos, se envía un mensaje de error
     replyText = "No encontré productos en la base de datos.";
     await sendMessage(replyText, userId); // Solo mensaje de texto
+    await inicio(userId, replyText);
+    userStates[userId].inProductSelection = false;
   }
 }
+
+// Función para obtener o crear un contacto
+async function getOrCreateContactId(userId) {
+  let contactId;
+
+  try {
+    
+    const [rows] = await dbConnection.query(
+      `SELECT id FROM esims_contact WHERE \`numero_chatbot\` = ?`,  
+      [userId]  
+    );
+
+    
+    if (rows.length > 0) {
+      contactId = rows[0].id;
+    } else {
+      
+      const [insertResult] = await dbConnection.query(
+        `INSERT INTO esims_contact (\`numero_chatbot\`, \`nombre_comprador\`) VALUES (?, ?)`,  // Insertar número y nombre
+        [userId, 'prueba']  // Insertamos el número de teléfono y el nombre "prueba"
+      );
+
+      
+      contactId = insertResult.insertId;
+    }
+
+    
+    return contactId;
+  } catch (error) {
+    console.error("Error al obtener o crear el contacto:", error);
+    return null;
+  }
+}
+
+
 
 // Maneja los mensajes entrantes
 app.post('/webhook', async (req, res) => {
@@ -252,7 +312,6 @@ app.post('/webhook', async (req, res) => {
     replyText = "Hola, bienvenido a Easy Shopping!";
     await sendMessage(replyText, userId); // Solo mensaje de texto
     await inicio(userId, replyText);
-
     return res.sendStatus(200); // Solo enviar la respuesta una vez
   }
   // Aquí se manejan los mensajes después del saludo
@@ -264,16 +323,47 @@ app.post('/webhook', async (req, res) => {
     }
   }
   else if (incomingText === "Pedidos" && !(userStates[userId]?.inProductSelection)) {
-    if (userStates[userId].order.length > 0) {
-      replyText = "Aquí tienes tus pedidos:\n"
-      await sendMessage(replyText, userId); // Solo mensaje de texto
+    try {
+      // Paso 1: Obtener el id del contacto desde la tabla esims_contact usando el numero_chatbot
+      const [contact] = await dbConnection.query(
+        `SELECT id FROM esims_contact WHERE numero_chatbot = ?`, // Buscar el id por el numero_chatbot
+        [userId] // El userId es el numero_chatbot del usuario
+      );
+  
+      // Verificar si se encontró la id del contacto
+      if (contact.length > 0) {
+        const idContacto = contact[0].id; // Obtener la id del contacto
+  
+        // Paso 2: Realizar la consulta a la tabla esims_sale con la id del contacto obtenida
+        const [pedidos] = await dbConnection.query(
+          `SELECT * FROM esims_sale WHERE id_contacto_id = ?`, // Buscar los pedidos asociados a la id del contacto
+          [idContacto] // Usamos la id del contacto obtenida
+        );
+  
+        // Verificar si hay pedidos
+        if (pedidos.length > 0) {
+          let replyText = "Aquí tienes tus pedidos:\n";
+          pedidos.forEach(pedido => {
+            // Personaliza el mensaje con la información relevante del pedido
+            replyText += `Pedido ID: ${pedido.id}\nFecha: ${pedido.fecha_venta}\nEstado: ${pedido.estado_pedido}\n\n`; // Añadido salto de línea entre fecha y estado
+          });
+          await sendMessage(replyText, userId); // Enviar los pedidos al usuario
+        } else {
+          replyText = "No tienes pedidos registrados.";
+          await sendMessage(replyText, userId); // Mensaje si no hay pedidos
+        }
+      } else {
+        const errorMessage = "No se encontró la ID de tu contacto.";
+        await sendMessage(errorMessage, userId); // Mensaje si no se encuentra la ID del contacto
+      }
+    } catch (error) {
+      console.error("Error al consultar los pedidos:", error);
+      const errorMessage = "Hubo un problema al obtener tus pedidos. Por favor, intenta de nuevo más tarde.";
+      await sendMessage(errorMessage, userId); // Mensaje en caso de error
     }
-    else {
-      replyText = "No tienes pedidos registrados.";
-      await sendMessage(replyText, userId); // Solo mensaje de texto
-    }
-
   }
+  
+  
   else if (incomingText === "Ayuda" && !(userStates[userId]?.inProductSelection)) {
 
     replyText = "ahora lo contactaremos.";
@@ -333,7 +423,8 @@ app.post('/webhook', async (req, res) => {
         } else {
           // No hay más productos, mostrar un mensaje
           const replyText = "No hay más productos disponibles en la siguiente página.";
-          await sendMessage(replyText, userId)};
+          await sendMessage(replyText, userId)
+        };
       }
       else if (incomingText === "<" && userStates[userId].productPage > 1) {
         userStates[userId].productPage -= 1;
@@ -394,11 +485,12 @@ app.post('/webhook', async (req, res) => {
           await sendMessage(replyText, userId);
           await postSelect(userId);
         }
-        else if (userStates[userId].order.length !== 0 && stockInsuficiente.length === 0 ) {
+        else if (userStates[userId].order.length !== 0 && stockInsuficiente.length === 0) {
 
           // Procesar pedido solo si hay stock suficiente
           const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-          const contactId = userStates[userId]?.contactId || null;
+          const contactId = await getOrCreateContactId(userId);
+          userStates[userId].contactId = contactId
 
           // Insertar el pedido en `esims_sale`
           const [saleResult] = await dbConnection.query(
@@ -439,6 +531,7 @@ app.post('/webhook', async (req, res) => {
           userStates[userId].inShoppingCart = false;
           userStates[userId].hasGreeted = false;
           userStates[userId].order = [];
+          userStates[userId].inProductSelection = false;
 
           console.log('Todos los productos fueron insertados con éxito');
         }
