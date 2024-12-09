@@ -1,9 +1,6 @@
 from django.urls import path
-from .views import inventario, añadir_producto, eliminar_producto, editar_producto, pedidos_view,crear_categoria, crear_medida,generar_pedido,detalle_pedido_view, activar_producto, get_product_precios
+from .views import inventario, añadir_producto, eliminar_producto, editar_producto, pedidos_view,crear_categoria, crear_medida,generar_pedido,detalle_pedido_view, activar_producto, get_product_precios, cambiar_estado_pedido
  # Esto está bien porque importa todas las vistas, incluida pedidos_view
-
-
-
 
 urlpatterns = [
     path('', inventario, name='inventario'),
@@ -17,4 +14,5 @@ urlpatterns = [
     path('pedidos/<int:id>/', detalle_pedido_view, name='detalle_pedido'),
     path('activar_producto/<int:pk>/', activar_producto, name='activar_producto'),
     path('get-price/<int:product_id>/', get_product_precios, name='get_product_price'),
+    path('pedidos/<int:id>/cambiar-estado/', cambiar_estado_pedido, name='cambiar_estado_pedido'),
 ]

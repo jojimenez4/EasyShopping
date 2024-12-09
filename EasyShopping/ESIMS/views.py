@@ -302,3 +302,19 @@ def get_product_precios(request, product_id):
         return JsonResponse({'success': True, 'precio': str(product.price)})
     except Product.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Product not found'})
+    
+@login_required
+def cambiar_estado_pedido(request, id):
+    pedido = get_object_or_404(Sale, id=id)
+    if request.method == 'POST':
+        nuevo_estado = request.POST.get('estado_pedido')
+        if nuevo_estado in dict(Sale.ESTADO_CHOICES).keys():
+            pedido.estado_pedido = nuevo_estado
+            pedido.save()
+            messages.success(request, f'El estado del pedido ha sido actualizado a "{nuevo_estado}".')
+        else:
+            messages.error(request, 'El estado seleccionado no es válido.')
+        return redirect('detalle_pedido', id=id)
+    else:
+        messages.error(request, 'Solicitud inválida.')
+        return redirect('detalle_pedido', id=id)

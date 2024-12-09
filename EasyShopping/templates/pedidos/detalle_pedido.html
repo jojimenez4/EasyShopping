@@ -18,6 +18,24 @@
     </div>
 
     <div class="mb-4">
+        <h4>Cambiar Estado del Pedido</h4>
+        <form method="post" action="{% url 'cambiar_estado_pedido' id=pedido.id %}">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="estado_pedido">Nuevo Estado</label>
+                <select id="estado_pedido" name="estado_pedido" class="form-control">
+                    {% for key, value in pedido.ESTADO_CHOICES %}
+                        <option value="{{ key }}" {% if key == pedido.estado_pedido %}selected{% endif %}>
+                            {{ value }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary mt-2">Cambiar Estado</button>
+        </form>
+    </div>
+
+    <div class="mb-4">
         <h4>Detalles del Pedido</h4>
         <table class="table table-bordered">
             <thead>
